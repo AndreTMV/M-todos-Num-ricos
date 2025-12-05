@@ -25,7 +25,7 @@ except Exception:  # pragma: no cover
 
 # ------------------------------- Tipos ---------------------------------------
 
-class Iteracion(TypedDict):
+class Iteracion(TypedDict, total=False):
     i: int
     xi: float
     fxi: float
@@ -34,10 +34,14 @@ class Iteracion(TypedDict):
     # xm para bisección y xr para posición falsa (nomenclatura común)
     xm: float
     fxm: float
+    # Campos para integración
+    area: float
+    n_seg: int
+    error: float
 
 
 MetodoNombre = Literal["biseccion", "posfalsa",
-                       "secante", "newton", "puntofijo"]
+                       "secante", "newton", "puntofijo", "trapecio"]
 
 
 # ----------------------- Utilidades de evaluación ----------------------------
@@ -73,6 +77,7 @@ def criterio_cumplido(
     - pct    : (|xm - xm_prev| / |xm|) * 100 <= tol
     """
     if criterio == "abs_fx":
+        # Para integración, fxm podría interpretarse como el error relativo o absoluto si se pasa
         return abs(fxm) <= tol
     if xm_prev is None:
         return False
@@ -144,6 +149,7 @@ def _render_mathtext_png(
     plt.close(fig)
     buf.seek(0)
     png_path = os.path.join(out_dir, basename + ".png")
+    # Intentar cargar para validar, aunque savefig ya escribió
     Image.open(buf).convert("RGBA").save(png_path)
     return png_path
 
@@ -185,8 +191,15 @@ def make_latex_panel(expr: str, h: Iteracion, metodo: MetodoNombre, digits: int 
     Genera el bloque LaTeX (como líneas) para una iteración, según el método.
     """
     def ff(v): return f"{float(v):.{digits}g}"
-    xi, xd, xm = ff(h["xi"]), ff(h["xd"]), ff(h["xm"])
-    fxi, fxd, fxm = ff(h["fxi"]), ff(h["fxd"]), ff(h["fxm"])
+    
+    # Valores comunes (pueden ser None/missing en algunos métodos)
+    xi = ff(h.get("xi", 0))
+    xd = ff(h.get("xd", 0))
+    xm = ff(h.get("xm", 0))
+    fxi = ff(h.get("fxi", 0))
+    fxd = ff(h.get("fxd", 0))
+    fxm = ff(h.get("fxm", 0))
+    
     expr_tex = expr.replace("*", r"\cdot ")
 
     if metodo == "biseccion":
@@ -256,6 +269,31 @@ def make_latex_panel(expr: str, h: Iteracion, metodo: MetodoNombre, digits: int 
             $$ x_{{k+1}} \;=\; g(x_k) $$
             $$ x_k = {xi} \;\Rightarrow\; x_{{k+1}} = g(x_k) \;\approx\; {xm} $$
             $$ f(x_{{k+1}}) \;\approx\; {fxm} $$
+            \end{{minipage}}
+            }}%
+        """.strip()
+    elif metodo == "trapecio":
+        area = ff(h.get("area", 0))
+        n = h.get("n_seg", 1)
+        err = ff(h.get("error", 0))
+        
+        # Diferenciar entre simple (n=1) y compuesto (n>1) en el título
+        titulo = "Trapecio Simple" if n == 1 else "Trapecio Compuesto"
+        formula = ""
+        if n == 1:
+            formula = rf"Area \approx \frac{{b-a}}{{2}}[f(a) + f(b)]"
+        else:
+            formula = rf"Area \approx \frac{{h}}{{2}}[f(a) + 2\sum f(x_i) + f(b)]"
+            
+        block = rf"""
+            \resizebox{{0.96\linewidth}}{{!}}{{%
+            \begin{{minipage}}{{\linewidth}}
+            \centering
+            \textbf{{\Large {titulo}}} \quad (n={n})\\[0.8em]
+            $$ f(x) = {expr_tex} $$
+            $$ {formula} $$
+            $$ \text{{Area Aprox}} \approx {area} $$
+            $$ \text{{Error Est.}} \approx {err} $$
             \end{{minipage}}
             }}%
         """.strip()
