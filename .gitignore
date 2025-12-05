@@ -1,0 +1,13 @@
+*
+
+!*/
+
+!*.py
+
+!.gitignore
+
+!requirements.txt
+
+!README.md
+
+metodos/
