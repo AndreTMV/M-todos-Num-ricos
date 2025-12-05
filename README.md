@@ -26,8 +26,8 @@ Este proyecto usa librerías externas para hacer los cálculos y las gráficas. 
 3.  Una vez dentro de la carpeta, escribe el siguiente comando y presiona Enter:
 
     ```bash
-    python -m venv venv
-    source venv/bin/activate
+    python -m venv metodos
+    source metodos/bin/activate
     pip install -r requirements.txt
     ```
 
