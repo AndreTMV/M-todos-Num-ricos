@@ -38,10 +38,13 @@ class Iteracion(TypedDict, total=False):
     area: float
     n_seg: int
     error: float
+    # Campos para Simpson (Substitution)
+    sum_odd: float
+    sum_even: float
 
 
 MetodoNombre = Literal["biseccion", "posfalsa",
-                       "secante", "newton", "puntofijo", "trapecio"]
+                       "secante", "newton", "puntofijo", "trapecio", "simpson"]
 
 
 # ----------------------- Utilidades de evaluación ----------------------------
@@ -292,8 +295,104 @@ def make_latex_panel(expr: str, h: Iteracion, metodo: MetodoNombre, digits: int 
             \textbf{{\Large {titulo}}} \quad (n={n})\\[0.8em]
             $$ f(x) = {expr_tex} $$
             $$ {formula} $$
-            $$ \text{{Area Aprox}} \approx {area} $$
-            $$ \text{{Error Est.}} \approx {err} $$
+            $$ \mathrm{{Area Aprox}} \approx {area} $$
+            $$ \mathrm{{Error Est.}} \approx {err} $$
+            \end{{minipage}}
+            }}%
+        """.strip()
+    elif metodo == "simpson":
+        i_curr = h.get("i", 0)
+            
+        # --- MODO INTRO (Repaso) ---
+        if i_curr == -1:
+            block = r"""
+                \resizebox{0.96\linewidth}{!}{%
+                \begin{minipage}{\linewidth}
+                \centering
+                \textbf{\LARGE Repaso de Fórmulas}\\[1em]
+                
+                \textbf{1. Paso ($h$):}
+                $$ h = \frac{b - a}{n} \quad (\mathrm{n\ par}) $$
+                
+                \textbf{2. Simpson Simple ($n=2$):}
+                $$ \mathrm{Area} \approx \frac{h}{3} \left[ f(x_0) + 4f(x_1) + f(x_2) \right] $$
+                
+                \textbf{3. Simpson Compuesto ($n > 2$):}
+                $$ \mathrm{Area} \approx \frac{h}{3} \left[ f(a) + 4\sum_{\mathrm{impar}} + 2\sum_{\mathrm{par}} + f(b) \right] $$
+                \end{minipage}
+                }%
+            """.strip()
+            return [block]
+            
+        # --- MODO CÁLCULO ---
+        area = ff(h.get("area", 0))
+        n = h.get("n_seg", 2)
+        # err = ff(h.get("error", 0)) # YA NO SE MUESTRA ERROR
+        
+        s_odd = ff(h.get("sum_odd", 0))
+        s_even = ff(h.get("sum_even", 0))
+        
+        a_val_raw = h.get("xi", 0)
+        b_val_raw = h.get("xd", 0)
+        a_val = ff(a_val_raw)
+        b_val = ff(b_val_raw)
+        
+        dx_val = (float(b_val_raw) - float(a_val_raw)) / n
+        dx_str = ff(dx_val)
+        
+        # Values from history
+        fa = ff(h.get("fxi", 0))
+        fb = ff(h.get("fxd", 0))
+        
+        titulo = "Simpson 1/3 Simple" if n == 2 else "Simpson 1/3 Compuesto"
+        
+        # 1. Original Integral
+        original_int = rf"\int_{{{a_val}}}^{{{b_val}}} {expr_tex} \, dx"
+        
+        # 2. Values / Evaluations
+        values_tex = ""
+        if n == 2:
+            values_tex = rf"$$ f(x_0)={fa}, \quad f(x_1)={s_odd}, \quad f(x_2)={fb} $$"
+        else:
+            values_tex = (
+                rf"$$ f(a)={fa}, \quad f(b)={fb} $$"
+                rf"$$ \sum_{{\mathrm{{impar}}}}={s_odd}, \quad \sum_{{\mathrm{{par}}}}={s_even} $$"
+            )
+
+        # 3. Delta x
+        dx_calculus = rf"h = \frac{{{b_val} - {a_val}}}{{{n}}} = {dx_str}"
+        
+        # 4. Area Formula & Subst
+        formula_tex = ""
+        sust_tex = ""
+        if n == 2:
+            formula_tex = r"\mathrm{Area} \approx \frac{h}{3}[f(x_0) + 4f(x_1) + f(x_2)]"
+            sust_tex = rf"\mathrm{{Area}} \approx \frac{{{dx_str}}}{{3}}[ {fa} + 4({s_odd}) + {fb} ]"
+        else:
+            formula_tex = r"\mathrm{Area} \approx \frac{h}{3}[f(a) + 4\sum_{\mathrm{impar}} + 2\sum_{\mathrm{par}} + f(b)]"
+            sust_tex = rf"\mathrm{{Area}} \approx \frac{{{dx_str}}}{{3}}[ {fa} + 4({s_odd}) + 2({s_even}) + {fb} ]"
+
+        block = rf"""
+            \resizebox{{0.96\linewidth}}{{!}}{{%
+            \begin{{minipage}}{{\linewidth}}
+            \centering
+            \textbf{{\Large {titulo}}} \quad (n={n})\\[0.5em]
+            
+            \textbf{{1. Integral Original:}}
+            $$ {original_int} $$
+            
+            \textbf{{2. Valores:}}
+            {values_tex}
+            
+            \textbf{{3. Cálculo de}} $h$:
+            $$ {dx_calculus} $$
+            
+            \textbf{{4. Cálculo del Área}}:
+            $$ {formula_tex} $$
+            $$ {sust_tex} $$
+            
+            \textbf{{Resultado Final}}:
+            $$ \mathrm{{Area}} \approx {area} $$
             \end{{minipage}}
             }}%
         """.strip()
