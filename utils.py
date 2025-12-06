@@ -276,24 +276,47 @@ def make_latex_panel(expr: str, h: Iteracion, metodo: MetodoNombre, digits: int 
         area = ff(h.get("area", 0))
         n = h.get("n_seg", 1)
         err = ff(h.get("error", 0))
+        h_val = ff(h.get("h_val", 0))
+        fa = ff(h.get("fa", 0))
+        fb = ff(h.get("fb", 0))
+        sum_f = ff(h.get("sum_f", 0))
         
-        # Diferenciar entre simple (n=1) y compuesto (n>1) en el título
+        # Límites
+        a_lim = ff(h.get("xi", 0))
+        b_lim = ff(h.get("xd", 0))
+
+        # Título y Fórmulas
         titulo = "Trapecio Simple" if n == 1 else "Trapecio Compuesto"
-        formula = ""
+        formula_gen = ""
+        sustitucion = ""
+        
+        # Integral
+        integral_tex = rf"\int_{{{a_lim}}}^{{{b_lim}}} ({expr_tex})\, dx"
+
         if n == 1:
-            formula = rf"Area \approx \frac{{b-a}}{{2}}[f(a) + f(b)]"
+            # Simple
+            formula_gen = r"I \approx \frac{b-a}{2}[f(a) + f(b)]"
+            sustitucion = rf"I \approx \frac{{{h_val}}}{{2}}[{fa} + {fb}]"
         else:
-            formula = rf"Area \approx \frac{{h}}{{2}}[f(a) + 2\sum f(x_i) + f(b)]"
+            # Compuesto
+            formula_gen = r"I \approx \frac{h}{2}\left[f(a) + 2\sum_{i=1}^{n-1} f(x_i) + f(b)\right]"
+            sustitucion = rf"I \approx \frac{{{h_val}}}{{2}}\left[{fa} + 2({sum_f}) + {fb}\right]"
             
         block = rf"""
             \resizebox{{0.96\linewidth}}{{!}}{{%
             \begin{{minipage}}{{\linewidth}}
             \centering
-            \textbf{{\Large {titulo}}} \quad (n={n})\\[0.8em]
-            $$ f(x) = {expr_tex} $$
-            $$ {formula} $$
-            $$ \text{{Area Aprox}} \approx {area} $$
-            $$ \text{{Error Est.}} \approx {err} $$
+            \textbf{{\Large {titulo}}} \quad (n={n})\\[0.5em]
+            \small
+            $$ \text{{Integral: }} {integral_tex} $$
+            $$ h = \frac{{b-a}}{{n}} = \frac{{{b_lim} - {a_lim}}}{{{n}}} = {h_val} $$
+            \medskip
+            \textbf{{Fórmula:}}
+            $$ {formula_gen} $$
+            \textbf{{Sustitución:}}
+            $$ {sustitucion} $$
+            \textbf{{Resultado:}}
+            $$ \text{{Area}} \approx \mathbf{{{area}}} \quad (\text{{Error}} \approx {err}) $$
             \end{{minipage}}
             }}%
         """.strip()
@@ -319,11 +342,14 @@ def precompute_latex_panels(expr: str, hist: List[Iteracion], metodo: MetodoNomb
 
 def make_interleaved_frames(n_iters: int, panel_hold: int = 1) -> List[tuple[str, int]]:
     """
-    Genera frames intercalados: ('plot', i) y ('panel', i) * panel_hold.
+    Genera frames intercalados: ('panel', i) * panel_hold y luego ('plot', i).
+    Primero se explica (panel) y luego se visualiza (plot).
     """
     frames: List[tuple[str, int]] = []
     for i in range(n_iters):
-        frames.append(("plot", i))
+        # Primero Panel (explicación)
         for _ in range(panel_hold):
             frames.append(("panel", i))
+        # Luego Plot (gráfica)
+        frames.append(("plot", i))
     return frames

@@ -46,16 +46,23 @@ def metodo_trapecio_iterativo(
     # Iteración 0: Trapecio Simple (n=1)
     n = 1
     h = (b - a) / n
-    area_prev = (f(a) + f(b)) * h / 2.0
+    fa = f(a)
+    fb = f(b)
+    area_prev = (fa + fb) * h / 2.0
     
     # Guardamos iter 0
     historial.append({
         "i": 0,
-        "xi": a, "xd": b, "xm": area_prev, # Usamos 'xm' para guardar el area actual
-        "fxi": 0.0, "fxd": 0.0, "fxm": 0.0, # Campos dummy para cumplir TypedDict si fuera estricto
+        "xi": a, "xd": b, "xm": area_prev, 
+        "fxi": fa, "fxd": fb, "fxm": 0.0,
         "area": area_prev * signo,
         "n_seg": n,
-        "error": 1.0 # Error inicial grande
+        "error": 1.0,
+        # Extras para panel
+        "h_val": h,
+        "fa": fa,
+        "fb": fb,
+        "sum_f": 0.0 # No hay intermedios en n=1
     })
     
     if max_iter == 0:
@@ -65,35 +72,37 @@ def metodo_trapecio_iterativo(
     area_actual = area_prev
     
     for k in range(1, max_iter + 1):
-        # Estrategia: Duplicar n cada vez (Romberg style base) o incrementar linealmente?
-        # Duplicar es mejor para visualizar "refinamiento".
         n_prev = n
         n = 2 * n_prev
         h = (b - a) / n
         
-        # Suma de nuevos puntos (puntos impares en la nueva malla)
-        # x_new = a + (2*j - 1)*h_new, j=1..n_prev
-        # O cálculo directo de trapecio compuesto estándar:
+        # Puntos y evaluación
         x_puntos = np.linspace(a, b, n + 1)
         y_puntos = np.array([f(x) for x in x_puntos])
         
-        # Fórmula compuesta: h/2 * [f(a) + 2*sum(f_intermedios) + f(b)]
+        # y_puntos[0] es f(a), y_puntos[-1] es f(b)
+        fa_val = y_puntos[0]
+        fb_val = y_puntos[-1]
         suma_intermedios = np.sum(y_puntos[1:-1])
-        area_actual = (h / 2.0) * (y_puntos[0] + 2 * suma_intermedios + y_puntos[-1])
+        
+        area_actual = (h / 2.0) * (fa_val + 2 * suma_intermedios + fb_val)
         
         err = abs(area_actual - area_prev)
         
         historial.append({
             "i": k,
             "xi": a, "xd": b, "xm": area_actual,
-            "fxi": 0, "fxd": 0, "fxm": err, # fxm guarda el error (diferencia)
+            "fxi": fa_val, "fxd": fb_val, "fxm": err,
             "area": area_actual * signo,
             "n_seg": n,
-            "error": err
+            "error": err,
+            "h_val": h,
+            "fa": fa_val,
+            "fb": fb_val,
+            "sum_f": suma_intermedios
         })
         
         # Verificación de criterio de convergencia
-        # Usamos 'abs' como |area_new - area_old| <= tol
         if criterio == "abs":
             if err <= tol:
                 return area_actual * signo, k, historial
@@ -194,11 +203,12 @@ def animar_trapecio(
         
         # Calcular puntos de trapecios
         x_trap = np.linspace(a, b, n_seg + 1)
+        # f es closure, evalua bien
         y_trap = [f(x) for x in x_trap]
         
         color_fill = '#3498db'
         color_edge = '#2980b9'
-        alpha_fill = 0.3
+        alpha_fill = 0.4
         
         for i in range(n_seg):
             x0, x1 = x_trap[i], x_trap[i+1]
@@ -206,13 +216,9 @@ def animar_trapecio(
             
             # Polígono del trapecio: (x0,0) -> (x0,y0) -> (x1,y1) -> (x1,0)
             verts = [(x0, 0), (x0, y0), (x1, y1), (x1, 0)]
-            poly = patches.Polygon(verts, closed=True, facecolor=color_fill, edgecolor=color_edge, alpha=alpha_fill, linewidth=1.5)
+            poly = patches.Polygon(verts, closed=True, facecolor=color_fill, edgecolor=color_edge, alpha=alpha_fill, linewidth=2.0)
             ax.add_patch(poly)
             patches_collection.append(poly)
-            
-            # Líneas verticales discontinuas para enfatizar segmentos
-            # linev = ax.vlines(x=[x0, x1], ymin=0, ymax=[y0, y1], colors=color_edge, linestyles=':', alpha=0.6)
-            # (No fácil de borrar si usamos vlines collection, mejor el borde del poligono ya hace eso)
 
     def _update_plot(i: int):
         h = hist[i]
@@ -225,14 +231,21 @@ def animar_trapecio(
         info_text = (
             f"Iteración: {h['i']}\n"
             f"Segmentos (n): {n_seg}\n"
+            f"Distancia (h): {h.get('h_val', 0):.4f}\n"
             f"Area Aprox: {area:.6f}\n"
             f"Dif/Error: {err:.2e}"
         )
         info_box.set_text(info_text)
 
+    # Dibuja el estado inicial (iteración 0) inmediatamente para que no empiece vacío
+    _update_plot(0)
+
     def init():
         ax_panel.set_visible(False)
         ax.set_visible(True)
+        # Importante: Como ya dibujamos _update_plot(0), init no debe borrarlo destructivamente
+        # pero FuncAnimation espera que init devuelva artists a redibujar si blit=True.
+        # Con blit=False, esto es solo setup.
         return []
 
     def update(frame):
